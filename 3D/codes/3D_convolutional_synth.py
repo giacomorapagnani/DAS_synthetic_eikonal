@@ -2,6 +2,9 @@ import numpy as np
 import os
 # %% FUNCTIONS
 
+def load_focals(filename):
+    return np.load(filename, allow_pickle=False)['focals']
+
 def radiation_patterns(phif,delta,l,phir,ih):
 	# phif  : strike
 	# delta : dip
@@ -45,13 +48,14 @@ def directivity_fiber(ih):
     return dir_p, dir_s
 
 #%% LOADING DATA
-data_dir=''
-travel_time_dir=''
+workdir='../'
+data_dir=os.path.join(workdir,'DATA')
+travel_time_dir=os.path.join(workdir,'TRAVEL_TIMES')
 
-focal_mechanism_file=os.path.join(data_dir, 'focal_mechanism.d')
+focal_mechanism_file=os.path.join(data_dir, 'focals_3d_90_deg.npz')     # CHANGE
 # list of dictionaries
 # keys : strike, dip, rake
-fm=np.load(focal_mechanism_file)
+fm=load_focals(focal_mechanism_file)
 
 fiber_geometry_dir=os.path.join(data_dir, 'fiber_geometry.npy')
 # list of dictionaries

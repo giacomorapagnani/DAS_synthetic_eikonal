@@ -1,70 +1,62 @@
 import os
 import subprocess
 import numpy as np
-import struct
 
-def write_nlloc_control_file(filename, grid_dir, vel_model, phase, x0, y0, z0, n, spacing):
-    """
-    Crea un file di configurazione NonLinLoc per il calcolo delle travel time.
-    """
+def write_grid2time_input(filename, vel_model, phase, origin, n, spacing, event_xyz, out_dir):
+    x0, y0, z0 = origin
+    xs, ys, zs = event_xyz
+    os.makedirs(out_dir, exist_ok=True)
+
     with open(filename, 'w') as f:
-        f.write(f"CONTROL 1 12345\n")
-        f.write(f"TRANS SDCART 0.0 0.0 0.0\n")  # sistema di coordinate (da adattare)
-        f.write(f"VGGRID {grid_dir}/{phase}  {x0} {y0} {z0} {n} {n} {n} {spacing} {spacing} {spacing}\n")
-        f.write(f"VGOUT {grid_dir}/{phase}.time\n")
-        f.write(f"VGTYPE TIME\n")
-        f.write(f"VGGRIDTYPE CARTESIAN\n")
-        f.write(f"VGPHASE {phase}\n")
-        f.write(f"VGVELOCITYMODEL {vel_model}\n")
-        f.write(f"VGMAXTRAVELTIME 30.0\n")
-        f.write(f"END\n")
+        f.write("CONTROL 1 12345\n")
+        f.write("TRANS NONE\n")
+        f.write(f"GTFILES {vel_model} {os.path.join(out_dir, phase)} {phase} 0\n")
+        f.write("GTMODE GRID3D\n")
+        f.write("MESSAGE 2\n")
+        f.write(f"GTSRCE SRCE_{phase} XYZ {xs} {ys} {zs}\n")
+        f.write(f"GT_GRID {x0} {y0} {z0} {n} {n} {n} {spacing} {spacing} {spacing}\n")
+        f.write("GT_METHOD GT_PLFD\n")
+        f.write(f"GT_PHASE {phase}\n")
+        f.write("END\n")
 
-def run_nlloc(control_file):
-    """Esegue il comando NLLoc per il calcolo delle travel time."""
-    subprocess.run(["Grid2Time", control_file], check=True)
+def run_grid2time(input_file):
+    result = subprocess.run(["Grid2Time", input_file], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        raise RuntimeError(f"Grid2Time failed with exit code {result.returncode}")
 
 def read_time_file(filename, n):
-    """Legge il file .time binario e restituisce una matrice numpy 3D."""
     with open(filename, 'rb') as f:
-        header = f.read(256)  # header NLLoc
+        f.read(256)  # skip header
         data = np.fromfile(f, dtype=np.float32)
     return data.reshape((n, n, n))
 
-def compute_travel_times(event_xyz, vel_model, n, spacing, out_dir="NLL_output"):
-    """
-    Calcola travel time P e S per un evento (x, y, z) usando NonLinLoc.
-    """
+def compute_travel_times(event_xyz, vel_model, n=50, spacing=1.0, out_dir="output"):
     os.makedirs(out_dir, exist_ok=True)
-    x0, y0, z0 = event_xyz
+    origin = (0.0, 0.0, 0.0)
 
-    # P
-    ctrl_P = os.path.join(out_dir, "time_P.in")
-    write_nlloc_control_file(ctrl_P, out_dir, vel_model, "P", x0, y0, z0, n, spacing)
-    run_nlloc(ctrl_P)
+    # Onde P
+    input_P = os.path.join(out_dir, "P.in")
+    write_grid2time_input(input_P, vel_model, "P", origin, n, spacing, event_xyz, out_dir)
+    run_grid2time(input_P)
     ttp = read_time_file(os.path.join(out_dir, "P.time"), n)
 
-    # S
-    ctrl_S = os.path.join(out_dir, "time_S.in")
-    write_nlloc_control_file(ctrl_S, out_dir, vel_model, "S", x0, y0, z0, n, spacing)
-    run_nlloc(ctrl_S)
+    # Onde S
+    input_S = os.path.join(out_dir, "S.in")
+    write_grid2time_input(input_S, vel_model, "S", origin, n, spacing, event_xyz, out_dir)
+    run_grid2time(input_S)
     tts = read_time_file(os.path.join(out_dir, "S.time"), n)
 
     return ttp, tts
 
-
 if __name__ == "__main__":
-    event_xyz = (0.0, 0.0, 5.0)  # km
-    
-    vel_mod_dir="../VEL_MOD/"
-    vel_model = "model3D.mod"      # file modello di velocità
-    
-    grid_length = 50  #km
-    spacing = 1.0 # km
-    n = int( round(grid_length/spacing) )
-
+    event_xyz = (0.0, 0.0, 5.0)  # evento a 5 km di profondità
+    vel_mod_dir= "../codes/"
+    vel_model = "model3D.mod"
+    n = 50
+    spacing = 1.0
     ttp, tts = compute_travel_times(event_xyz, vel_model, n, spacing)
 
-    print("Travel time P shape:", ttp.shape)
-    print("Travel time S shape:", tts.shape)
-    np.save("travel_time_P.npy", ttp)
-    np.save("travel_time_S.npy", tts)
+    print("Travel time P:", ttp.shape, np.nanmin(ttp), np.nanmax(ttp))
+    print("Travel time S:", tts.shape, np.nanmin(tts), np.nanmax(tts))

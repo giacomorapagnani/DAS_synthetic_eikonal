@@ -16,7 +16,7 @@
 import os
 import sys
 import numpy as num
-import loki.latlon2cart as ll2c
+import latlon2cart as ll2c
 
 class Traveltimes:
 

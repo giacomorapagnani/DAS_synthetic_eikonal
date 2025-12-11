@@ -110,7 +110,7 @@ fiber_geometry_dir=os.path.join(data_dir, 'fiber_geometry.npy')
 # keys : x, y, z
 fiber_geometry=np.load(fiber_geometry_dir)
 
-# LOAD TRAVEL TIME 
+# LOAD TRAVEL TIME !!!MISSING!!!
 # ARRAY 3D : NxNxN
 tt_file_p=os.path.join(travel_time_dir, 'tt_p.npy')
 tt_file_s=os.path.join(travel_time_dir, 'tt_s.npy')
@@ -134,9 +134,9 @@ trace['tt_p'] = tt_fiber_p.astype('f4')
 tt_fiber_s=tt_s[fiber_geometry['x'],fiber_geometry['y'],fiber_geometry['z']]
 trace['tt_s'] = tt_fiber_s.astype('f4')
 
-# ih: incidence angle MISSING
+# ih: incidence angle !!!MISSING!!!
 
-# phir: reciver-azimuth MISSING
+# phir: reciver-azimuth !!!MISSING!!!
 
 # calculate recorded amplitude
 amp_p = 1 * directivity_fiber(ih,'P') * radiation_patterns(fm['stirke'],fm['dip'],fm['rake'],phir,ih,'P')

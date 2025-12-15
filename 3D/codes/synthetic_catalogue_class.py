@@ -36,22 +36,23 @@ class Synthetic_catalogue:
                     inputs[toks[0]]=eval(toks[1])
         self.inputs=inputs
 
-    def _write_catalogue(self, filename):
-        with open(self.data_dir+'/'+filename,'w') as f:
+    def _write_catalogue(self, catfile, catname ):
+        with open(self.data_dir+'/'+catfile,'w') as f:
             f.write('EventName OriginTime Latitude(deg) Longitude(deg) Depth(km) Magnitude Strike Dip Rake \n')
             for event_id in sorted(self.events.keys()):
                 tor, lat, lon, dep, mag, strike, dip, rake=self.events[event_id]
-                evline=' %6.4f %7.4f %4.2f %3.2f %5.2f %5.2f %5.2f\n' %(lat,lon,dep/1000,mag,strike,dip,rake)
-                f.write(event_id+evline)
+                time_s=UTCDateTime(tor)
+                evline=' %s %7.4f %7.4f %4.2f %3.2f %5.2f %5.2f %5.2f\n' %(str(time_s),lat,lon,dep/1000,mag,strike,dip,rake)
+                f.write(catname+event_id+evline)
         events=[]
         for event_id in sorted(self.events.keys()):
             tor, lat, lon, dep, mag, strike, dip, rake=self.events[event_id]
             time_s=UTCDateTime(tor)
-            ev=model.Event(name=event_id, time=time_s,lat=lat, lon=lon,depth=dep, magnitude=mag)
+            ev=model.Event(name=catname+event_id, time=time_s,lat=lat, lon=lon,depth=dep, magnitude=mag)
             mt = pmt.MomentTensor(strike=strike, dip=dip, rake=rake, magnitude=mag)
             ev.moment_tensor = mt
             events.append(ev)
-        model.dump_events(events, self.data_dir+'/'+filename.replace('.txt','.pf'))
+        model.dump_events(events, self.data_dir+'/'+catfile.replace('.txt','.pf'))
 
     def __gen_events(self):
         id, tor = self.__gen_evtime()
@@ -77,7 +78,7 @@ class Synthetic_catalogue:
         mag = self.inputs['magmin'] + (self.inputs['magmax']-self.inputs['magmin'])*num.random.rand()
         return mag
     
-    def gen_catalogue(self, catname, return_object='False', seed=None):
+    def gen_catalogue(self, catfile, catname, return_object='False', seed=None):
         n_sources=self.inputs['n_sources']
         events={}
         self.fm_sampler=FocalMechanismSampler(n_sources)
@@ -86,15 +87,14 @@ class Synthetic_catalogue:
             event_id = ((str(id).split(".")[0]).replace(':','')).replace('-','')
             events[event_id]=[tor, lat, lon, dep, mag, strike, dip, rake]
         self.events=events
-        self._write_catalogue(catname)
+        self._write_catalogue(catfile,catname)
         if seed is not None:
             num.random.seed(seed)
         if return_object:
             return events
 
 if __name__ == "__main__":
-    # mod inputs and add strike,dip,rake
-    ###### generate_catalogue
+    ### Catalogue Parameters (CHANGE) ###
     nsources=1
     lat_min=40.775
     lat_max=40.855       
@@ -106,12 +106,15 @@ if __name__ == "__main__":
     t_max="2025-12-01"    
     mag_min=2.0           
     mag_max=4.5           
-
     inputs={'n_sources':nsources,'latmin':lat_min, 'latmax':lat_max, 'lonmin':lon_min, 'lonmax':lon_max, 'depmin':dep_min, 'depmax':dep_max, 
                 'tormin':t_min, 'tormax':t_max, 'magmin':mag_min, 'magmax':mag_max, 'focal_mechanism':"dc_random_uniform"}
+    
+    ### Catlogue directory
+    cat_dir='../CAT'
+    cat_name='flegrei_synth_'   ### CHANGE CATALOGUE NAME ###
+    cat_file=f'catalogue_{cat_name}{str(nsources)}_ev.txt'
 
-    data_dir='../CAT'
-    catname=f'catalogue_flegrei_synth_{str(nsources)}_ev.txt'
-    dataset=Synthetic_catalogue(data_dir, inputs, input_type='dict')
-    dataset.gen_catalogue(catname, seed=11)
+    ### Generate Catalogue
+    dataset=Synthetic_catalogue(cat_dir, inputs, input_type='dict')
+    dataset.gen_catalogue(cat_file, cat_name, seed=11)
 

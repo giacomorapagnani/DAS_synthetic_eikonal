@@ -1,0 +1,2 @@
+EventName OriginTime Latitude(deg) Longitude(deg) Depth(km) Magnitude Strike Dip Rake 
+20220403T234701 40.8436 14.1593 2.97 3.49  0.00  0.00 -180.00

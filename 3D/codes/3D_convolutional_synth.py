@@ -1,117 +1,161 @@
 import numpy as np
 import os
-# %% FUNCTIONS
+# %% CLASS
 
-def load_focals(filename):
-    return np.load(filename, allow_pickle=False)['focals']
-
-def radiation_patterns(phif,delta,l,phir,ih,phase):
+class ConvolutionalSynth:
     """
-    Calculate radiation pattern at fiber's channel given a FM.
+    Class to generate synthetic DAS data using convolution and NLL travel times.
 
-    Args:
-        phif  (float) : strike
-        delta (float) : dip
-        l     (float) : rake
-        phir  (float) : receiver-azimuth
-        ih    (float) : take-off angle
-        phase         : P or S phase
-
-    Returns:
-        float: radiation amplitude for P or S phase.
+    Attributes:
+        event: list of Objects containing event coordinates and source parameters:
+            lat, lon, depth, mag, strike, dip, rake.
+        fiber_geometry (list): List of dictionaries defining fiber geometry with keys 'x', 'y', 'z'.
+        tt_p (np.ndarray): 1D array of P-wave travel times.
+        tt_s (np.ndarray): 1D array of S-wave travel times.
     """
 
-    Fp= ( np.cos(l) * np.sin(delta) * np.sin( 2 * ( phir - phif ) )
-    - np.sin(l) * np.sin(2*delta) * (np.sin(phir - phif))**2 ) * ( np.sin(ih) )**2 
-    + ( np.sin(l) * np.cos(2*delta) * np.sin(phir - phif) ) * np.sin(2*ih) 
-    + np.sin(l) * np.sin(2*delta) * (np.cos(ih))**2
+    def __init__(self, event_path, fiber_geometry_path, tt_p, tt_s):
+        self.event = self.load_events(event_path)
+        self.fiber_geometry = self.load_fiber_geometry(fiber_geometry_path)
+        self.tt_p = tt_p
+        self.tt_s = tt_s
+
+    def radiation_patterns(self,phase):
+        """
+        Calculate radiation pattern at fiber's channel given a FM.
+
+        Args:
+            phif  (float) : strike
+            delta (float) : dip
+            l     (float) : rake
+            phir  (float) : receiver-azimuth
+            ih    (float) : take-off angle
+            phase         : P or S phase
+
+        Returns:
+            float: radiation amplitude for P or S phase.
+        """
+        phif = self.strike
+        delta = self.dip
+        l = self.rake
+
+        Fp= ( np.cos(l) * np.sin(delta) * np.sin( 2 * ( phir - phif ) )
+        - np.sin(l) * np.sin(2*delta) * (np.sin(phir - phif))**2 ) * ( np.sin(ih) )**2 
+        + ( np.sin(l) * np.cos(2*delta) * np.sin(phir - phif) ) * np.sin(2*ih) 
+        + np.sin(l) * np.sin(2*delta) * (np.cos(ih))**2
+
+        Fsv= ( np.sin(l) * np.cos(2*delta) * np.sin(phir - phif) 
+        - np.cos(l) * np.cos(delta) * np.cos(phir - phif) ) * np.cos(2* ih)
+        + 0.5 * np.cos(l) *  np.sin(delta) * np.sin( 2 * ( phir - phif ) ) * np.sin(2*ih)
+        - 0.5 * np.sin(l) *  np.sin(2*delta) * np.sin(2*ih) * ( 1 + (np.sin(phir-phif))**2 )
+
+        Fsh=( np.cos(l) * np.cos(delta) * np.sin(phir - phif) 
+        + np.sin(l) * np.cos(2*delta) * np.cos(phir - phif) ) * np.cos(ih)
+        +  ( np.cos(l) *  np.sin(delta) * np.cos( 2 * ( phir - phif ) )
+        - 0.5 * np.sin(l) *  np.sin(2*delta) * np.sin(2 * (phir-phif) ) ) * np.sin(ih)
     
-    Fsv= ( np.sin(l) * np.cos(2*delta) * np.sin(phir - phif) 
-    - np.cos(l) * np.cos(delta) * np.cos(phir - phif) ) * np.cos(2* ih)
-    + 0.5 * np.cos(l) *  np.sin(delta) * np.sin( 2 * ( phir - phif ) ) * np.sin(2*ih)
-    - 0.5 * np.sin(l) *  np.sin(2*delta) * np.sin(2*ih) * ( 1 + (np.sin(phir-phif))**2 )
+        Fs = Fsv + Fsh
+
+        if phase=='P':
+            return Fp
+        elif phase=='S':
+            return Fs
+        else:
+            print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
+            exit
+        return 
+
+    def ricker(f0,dt,nsamples,derivative=False):
+        # if 'derivative=True' compute derivative of ricket wavelet
+        if (nsamples%2):
+            t=((nsamples-1)*dt)/2.
+        else:
+            nsamples +=1
+            t=((nsamples-1)*dt)/2.
+        x=f0*np.linspace(-t,t,nsamples)
+        ric=( ( 1. - ( 2. * np.pi * (x**2.) ) ) * np.exp( -np.pi * (x**2.) ) )
+        tax=x/f0
+        if derivative:
+            # ric'
+            ric[1:]= ( ric[1:]-ric[0:-1] ) / dt
+            ric[0]=0
+            # normalization
+            w_max = np.max(np.abs(ric))
+            ric=ric/w_max
+        return ric, tax
+
+    def directivity_fiber(self,phase):
+        """
+        Calculate directivity at a given fiber's channel.
+
+        Args:
+            ih    (float) : take-off angle
+            phase         : P or S phase
+
+        Returns:
+            float: directivity amplitude for P or S phase.
+        """
+
+        if phase=='P':
+            dir_p = (np.cos(ih))**2
+        elif phase=='S':
+            dir_s = np.sin(2*ih)
+        else:
+            print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
+            exit
+        return dir_p, dir_s
+
+    def incidence_angle(self):
+        # !!!MISSING!!!
+        return  
+    def receiver_azimuth(self):
+        # !!!MISSING!!!
+        return  
     
-    Fsh=( np.cos(l) * np.cos(delta) * np.sin(phir - phif) 
-    + np.sin(l) * np.cos(2*delta) * np.cos(phir - phif) ) * np.cos(ih)
-    +  ( np.cos(l) *  np.sin(delta) * np.cos( 2 * ( phir - phif ) )
-    - 0.5 * np.sin(l) *  np.sin(2*delta) * np.sin(2 * (phir-phif) ) ) * np.sin(ih)
-	
-    Fs = Fsv + Fsh
+    def load_fiber_geometry(self, filepath):
+        # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
+        fiber_geometry = []
+        with open(filepath, "r") as f:
+            next(f)  # skip header
+            for line in f:
+                st_name, lat, lon, elev = line.split()
+                fiber_geometry.append([st_name, float(lat), float(lon), float(elev)])
+        return fiber_geometry
+    
+    def load_events(self, filepath):
+        # EVENTS -> list: event_name, lat, lon, depth, mag, strike, dip, rake
+        events = []
+        with open(filepath, "r") as f:
+            next(f)  # skip header
+            for line in f:
+                event_name, lat, lon, depth, mag, strike, dip, rake = line.split()
+                events.append([event_name, float(lat), float(lon), float(depth), 
+                               float(mag), float(strike), float(dip), float(rake)])
+        return events
 
-    if phase=='P':
-        return Fp
-    elif phase=='S':
-        return Fs
-    else:
-        print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
-        exit
-    return 
-
-def ricker(f0,dt,nsamples,derivative=False):
-    # if 'derivative=True' compute derivative of ricket wavelet
-    if (nsamples%2):
-        t=((nsamples-1)*dt)/2.
-    else:
-        nsamples +=1
-        t=((nsamples-1)*dt)/2.
-    x=f0*np.linspace(-t,t,nsamples)
-    ric=( ( 1. - ( 2. * np.pi * (x**2.) ) ) * np.exp( -np.pi * (x**2.) ) )
-    tax=x/f0
-    if derivative:
-        # ric'
-        ric[1:]= ( ric[1:]-ric[0:-1] ) / dt
-        ric[0]=0
-        # normalization
-        w_max = np.max(np.abs(ric))
-        ric=ric/w_max
-    return ric, tax
-
-def directivity_fiber(ih,phase):
-    """
-    Calculate directivity at a given fiber's channel.
-
-    Args:
-        ih    (float) : take-off angle
-        phase         : P or S phase
-
-    Returns:
-        float: directivity amplitude for P or S phase.
-    """
-    if phase=='P':
-        dir_p = (np.cos(ih))**2
-    elif phase=='S':
-        dir_s = np.sin(2*ih)
-    else:
-        print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
-        exit
-    return dir_p, dir_s
-
-#%% LOADING DATA
+#%% LOAD DATA
 workdir='../'
-data_dir=os.path.join(workdir,'DATA')
-travel_time_dir=os.path.join(workdir,'TRAVEL_TIMES')
+# FIBER GEOMETRY
+fiber_geometry_dir=os.path.join(workdir,'FIBER_GEOMETRY')
+fiber_geometry_file=os.path.join(fiber_geometry_dir, 'fiber_geometry_flegrei.txt')
+# EVENTS
+event_dir=os.path.join(workdir,'CAT')
+event_file=os.path.join(event_dir,'catalog_flegrei.txt')
 
-# LOAD FOCAL MECHANISMS
-switch_focal_mechanism_load=False                                           # SWITCH
-if switch_focal_mechanism_load:  
-    focal_mechanism_file=os.path.join(data_dir, 'focals_3d_20_deg.npz')     # CHANGE
-    # list of dictionaries
-    # keys : strike, dip, rake
-    focal_mechanisms=load_focals(focal_mechanism_file)
-else:
-    fm = dict()
-    fm['strike'] = 0.0
-    fm['dip'] = 90.0
-    fm['rake'] = 0.0
+'''
+                # FOCAL MECHANISMS
+                # dict with keys: strike, dip, rake
+                from fibonacci_fm_sampler_class import FocalMechanismSampler
+                fm_sampler = FocalMechanismSampler(N=1,start_index=0)
+                fm = dict()
+                fm['strike'] ,fm['dip'], fm['rake'] = fm_sampler.next() 
+'''
 
-# LOAD FIBER GEOMETRY
-fiber_geometry_dir=os.path.join(data_dir, 'fiber_geometry.npy')
-# list of dictionaries
-# keys : x, y, z
-fiber_geometry=np.load(fiber_geometry_dir)
+synth=ConvolutionalSynth(event=event_file, fiber_geometry_path=fiber_geometry_file, tt_p=, tt_s=)
 
-# LOAD TRAVEL TIME !!!MISSING!!!
-# ARRAY 3D : NxNxN
+
+# TRAVEL TIME
+# ARRAY 1D : N
 tt_file_p=os.path.join(travel_time_dir, 'tt_p.npy')
 tt_file_s=os.path.join(travel_time_dir, 'tt_s.npy')
 tt_p=np.load(tt_file_p)
@@ -120,7 +164,7 @@ tt_s=np.load(tt_file_s)
 #%% SYNTHETIC GENERATION
 #----------------------------------------------------------------------
 # create list of dictionaries for every point in the fiber
-# keys: x , y , z , tt_p , amp_p, tt_s , amp_s
+# keys: channel_name, x , y , z , tt_p , amp_p, tt_s , amp_s
 n=len(fiber_geometry)
 trace = np.zeros( n, dtype=[ ('x', 'f4'), ('y', 'f4'), ('z', 'f4'), 
         ('tt_p', 'f4'), ('amp_p', 'f4'), ('tt_s', 'f4'), ('amp_s', 'f4') ] )

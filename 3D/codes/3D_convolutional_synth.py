@@ -1,30 +1,26 @@
 import numpy as np
 import os
+from traveltimes_NLL_class import Traveltimes
+from traveltimes_event_class import TravelTimeEvent
 # %% CLASS
 
 class ConvolutionalSynth:
     """
     Class to generate synthetic DAS data using convolution and NLL travel times.
-
     Attributes:
         event (list): list containing event coordinates and source parameters:
             EventName OriginTime Latitude(deg) Longitude(deg) Depth(km) Magnitude Strike Dip Rake 
         fiber_geometry (list): List fiber geometry :
             Station_name    Latitude    Longitude   Elevation_km
-        tt_p (np.ndarray): 1D array of P-wave travel times.
-        tt_s (np.ndarray): 1D array of S-wave travel times.
     """
 
-    def __init__(self, events_path, fiber_geometry_path, tt_p, tt_s):
+    def __init__(self, events_path, fiber_geometry_path):
         self.event = self._load_events(events_path)
         self.fiber_geometry = self._load_fiber_geometry(fiber_geometry_path)
-        self.tt_p = tt_p
-        self.tt_s = tt_s
 
-    def radiation_patterns(self,phase):
+    def _radiation_patterns(self,phase):
         """
         Calculate radiation pattern at fiber's channel given a FM.
-
         Args:
             phif  (float) : strike
             delta (float) : dip
@@ -32,7 +28,6 @@ class ConvolutionalSynth:
             phir  (float) : receiver-azimuth
             ih    (float) : take-off angle
             phase         : P or S phase
-
         Returns:
             float: radiation amplitude for P or S phase.
         """
@@ -64,10 +59,67 @@ class ConvolutionalSynth:
         else:
             print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
             exit
-        return 
+        return
+    
+    def _directivity_fiber(self,phase):
+        """
+        Calculate directivity at a given fiber's channel.
+        Args:
+            ih    (float) : take-off angle
+            phase         : P or S phase
+        Returns:
+            float: directivity amplitude for P or S phase.
+        """
+        if phase=='P':
+            dir_p = (np.cos(ih))**2
+        elif phase=='S':
+            dir_s = np.sin(2*ih)
+        else:
+            print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
+            exit
+        return dir_p, dir_s
 
-    def ricker(f0,dt,nsamples,derivative=False):
+    def incidence_angle(self):
+        # !!!MISSING!!!
+        return  
+    def receiver_azimuth(self):
+        # !!!MISSING!!!
+        return
+
+    def trace_amplitude(self,phase):
+        # Calculate trace amplitude at a given fiber's channel.
+        dir_fib = self._directivity_fiber(phase)
+        rad_pat = self._radiation_patterns(phase)
+        amp = 1 * dir_fib * rad_pat
+        return  amp
+
+    def gen_data_matrix(self, dt, time_window):
+        # Generates empty time vs channels data matrices for P and S waves
+        self.dt = dt
+        self.tax = self._gen_time_axis(time_window)
+        self.data_p=np.zeros((np.size(self.fiber_geometry),np.size(tax)))
+        self.data_s=np.zeros((np.size(self.fiber_geometry),np.size(tax)))
+        return
+    
+    ######################################
+    ######################################
+    ######################################
+    trace_index=list(range(len(trace)))
+    time_index_p= int( round( trace['tt_p']/dt ) )
+    dataP[trace_index,time_index_p]=trace['amp_p']
+    ######################################
+    ######################################
+    ######################################
+
+    def _gen_time_axis(self,tmax):
+        ns=int(round(tmax/self.dt))
+        tax=np.arange(ns)*dt
+        return tax
+
+    def ricker(self,f0, nsamples, dt=None, derivative=False):
         # if 'derivative=True' compute derivative of ricket wavelet
+        if dt is None:
+            dt=self.dt  
         if (nsamples%2):
             t=((nsamples-1)*dt)/2.
         else:
@@ -83,35 +135,9 @@ class ConvolutionalSynth:
             # normalization
             w_max = np.max(np.abs(ric))
             ric=ric/w_max
-        return ric, tax
-
-    def directivity_fiber(self,phase):
-        """
-        Calculate directivity at a given fiber's channel.
-
-        Args:
-            ih    (float) : take-off angle
-            phase         : P or S phase
-
-        Returns:
-            float: directivity amplitude for P or S phase.
-        """
-
-        if phase=='P':
-            dir_p = (np.cos(ih))**2
-        elif phase=='S':
-            dir_s = np.sin(2*ih)
-        else:
-            print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
-            exit
-        return dir_p, dir_s
-
-    def incidence_angle(self):
-        # !!!MISSING!!!
-        return  
-    def receiver_azimuth(self):
-        # !!!MISSING!!!
-        return  
+        self.ricker=ric
+        self.ricker_tax=tax
+        return
     
     def _load_fiber_geometry(self, filepath):
         # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
@@ -135,13 +161,13 @@ class ConvolutionalSynth:
         return events
 
 if __name__ == "__main__":
-
+    #%% INPUTS:
     workdir='../'
-    # FIBER GEOMETRY
+    #### 1 - FIBER GEOMETRY
     fiber_geometry_dir=os.path.join(workdir,'FIBER_GEOMETRY')
     fiber_geometry_file=os.path.join(fiber_geometry_dir, 'flegrei_stations_geometry.txt')      ### CHANGE ###
-    
-    # EVENTS
+
+    #### 2 - EVENTS
     SWITCH_generate_new_catalogue=False
     if SWITCH_generate_new_catalogue:
         # generate new synthetic catalogue
@@ -160,12 +186,12 @@ if __name__ == "__main__":
         mag_max=4.5           
         inputs={'n_sources':nsources,'latmin':lat_min, 'latmax':lat_max, 'lonmin':lon_min, 'lonmax':lon_max, 'depmin':dep_min, 'depmax':dep_max, 
                     'tormin':t_min, 'tormax':t_max, 'magmin':mag_min, 'magmax':mag_max, 'focal_mechanism':"dc_random_uniform"}
-        
+
         ### Catlogue directory
         cat_dir=os.path.join(workdir,'CAT')
         cat_name='flegrei_synth_'                                               ### NEW CATALOGUE NAME (CHANGE) ###
         cat_file=f'catalogue_{cat_name}{str(nsources)}_ev.txt'
-    
+
         ### Generate Catalogue
         print(f'GENERATING NEW CATALOGUE: {cat_file}')
         dataset=Synthetic_catalogue(cat_dir, inputs, input_type='dict')
@@ -177,83 +203,76 @@ if __name__ == "__main__":
         filename_events='catalogue_flegrei_synth_1_ev.txt'                                ### CHANGE ###
         print(f'READING EVENTS FROM FILE: {filename_events}')
         events_file=os.path.join(event_dir,filename_events)
-    
-    #####################################################
-    # SYNTHETIC GENERATION
-    synth=ConvolutionalSynth(events_path=events_file, 
-                             fiber_geometry_path=fiber_geometry_file, 
-                             tt_p=, 
-                             tt_s=)
-    
-    # TRAVEL TIME
-    # ARRAY 1D : N
-    tt_file_p=os.path.join(travel_time_dir, 'tt_p.npy')
-    tt_file_s=os.path.join(travel_time_dir, 'tt_s.npy')
-    tt_p=np.load(tt_file_p)
-    tt_s=np.load(tt_file_s)
-    
-    # %%
-    
-    #%% SYNTHETIC GENERATION
-    #----------------------------------------------------------------------
-    # create list of dictionaries for every point in the fiber
-    # keys: channel_name, x , y , z , tt_p , amp_p, tt_s , amp_s
-    n=len(fiber_geometry)
-    trace = np.zeros( n, dtype=[ ('x', 'f4'), ('y', 'f4'), ('z', 'f4'), 
-            ('tt_p', 'f4'), ('amp_p', 'f4'), ('tt_s', 'f4'), ('amp_s', 'f4') ] )
-    trace['x'] = fiber_geometry['x'].astype('f4')
-    trace['y'] = fiber_geometry['y'].astype('f4')
-    trace['z'] = fiber_geometry['z'].astype('f4')
-    
-    tt_fiber_p=tt_p[fiber_geometry['x'],fiber_geometry['y'],fiber_geometry['z']]
-    trace['tt_p'] = tt_fiber_p.astype('f4')
-    
-    tt_fiber_s=tt_s[fiber_geometry['x'],fiber_geometry['y'],fiber_geometry['z']]
-    trace['tt_s'] = tt_fiber_s.astype('f4')
-    
-    # ih: incidence angle !!!MISSING!!!
-    
-    # phir: reciver-azimuth !!!MISSING!!!
-    
-    # calculate recorded amplitude
-    amp_p = 1 * directivity_fiber(ih,'P') * radiation_patterns(fm['stirke'],fm['dip'],fm['rake'],phir,ih,'P')
-    amp_s = 1 * directivity_fiber(ih,'S') * radiation_patterns(fm['stirke'],fm['dip'],fm['rake'],phir,ih,'S')
-    
-    trace['amp_p'] = amp_p.astype('f4')
-    trace['amp_s'] = amp_s.astype('f4')
-    
-    #----------------------------------------------------------------------
-    # Time axis
+
+    #### 3 - NLL grid parameters 
+    # (CHANGE: should match those used to generate the traveltimes)
+    nx=151 # number of grid points in x direction
+    ny=151 # number of grid points in y direction
+    nz=61  # number of grid points in z direction
+    dx=0.1 # km
+    dy=0.1 # km
+    dz=0.1 # km
+    ox=0.0      # origin x coordinate (km)
+    oy=0.0      # origin y coordinate (km)
+    oz=-1.0     # origin z coordinate (km), positive DOWN
+    coord_origin_lat=40.777242 # latitude of the grid origin 
+    coord_origin_lon=14.025848 # longitude of the grid origin
+    coord_origin_ele=0.0       # elevation of the grid origin (km)
+    NLL_grid_parameters = {
+        'nx': nx,'ny': ny, 'nz': nz, 'dx': dx, 'dy': dy, 'dz': dz,
+        'co_x': ox, 'co_y': oy, 'co_z': oz, 
+        'co_lat': coord_origin_lat, 'co_lon': coord_origin_lon, 'co_ele': coord_origin_ele}
+
+    #### 4 - NLL traveltime matrices
+    db_path = '../NLL/FLEGREI/nll_grid'                                                    ### CHANGE ###
+    hdr_filename = 'header.hdr'
+    precision='single'
+    model = 'time'
+    tt_nll_obj = Traveltimes(db_path, hdr_filename)
+    tt_nll_p = tt_nll_obj.load_traveltimes('P', model, precision)
+    tt_nll_s = tt_nll_obj.load_traveltimes('S', model, precision)
+
+    #### 5 - Time axis
     dt= 0.02                                        # ARBITRARY (?) 
-    tmax = np.max( np.abs( trace['tt'] ) )
-    tmax += tmax*0.20 # add 20% to max travel time
-    ns=int(round(tmax/dt))
-    tax=np.arange(ns)*dt
-    
-    # Ricker wavelet
+    time_window= 120 #s                             # ARBITRARY (?)
+    tax=time_win
+
+    #### 6 - Ricker wavelet
     nsamples_w=200                                  # CHANGE
     frequency_w=75                                  # CHANGE
-    wavelet,taxw=ricker(frequency_w,dt,nsamples_w,der=True)
-    
-    
+    wavelet,taxw=ricker()
+
+    #%% SYNTHETIC GENERATION:
+    # TravelTimeEvent class
+    tt_class=TravelTimeEvent(NLL_grid_parameters= NLL_grid_parameters,
+                             fiber_geometry_path=fiber_geometry_file)
+
+    # ConvolutionalSynth class
+    synth=ConvolutionalSynth(events_path=events_file, 
+                             fiber_geometry_path=fiber_geometry_file)
+    tt_p=tt_class.get_travel_time(event, tt_nll_p)
+    tt_s=tt_class.get_travel_time(event, tt_nll_s)
+
+    #----------------------------------------------------------------------
+
+    # ih: incidence angle !!!MISSING!!!
+
+    # phir: reciver-azimuth !!!MISSING!!!
+
+
+    #----------------------------------------------------------------------
+
+
+
     # Time vs Channels matrix
-    dataP=np.zeros((np.size(trace),np.size(tax)))
-    dataS=np.zeros((np.size(trace),np.size(tax)))
-    trace_index=list(range(len(trace)))
-    
-    time_index_p= int( round( trace['tt_p']/dt ) )
-    dataP[trace_index,time_index_p]=trace['amp_p']
-    
-    time_index_s= int( round( trace['tt_s']/dt ) )
-    dataS[trace_index,time_index_s]=trace['amp_s']
-    
+
     # Convolution
     for i in range(np.size(trace_index)):
         seisP=np.convolve(wavelet,dataP[i,:])
         seisS=np.convolve(wavelet,dataS[i,:])
-    
+
     data = dataP + dataS
-    
+
     noise = np.random.normal(0,1/30,(data.shape))
     data = data + noise
     #----------------------------------------------------------------------

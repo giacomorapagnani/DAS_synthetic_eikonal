@@ -129,11 +129,11 @@ class ConvolutionalSynth:
                     exclude_directivity=True, exclude_radiation_pattern=True )
     
         for i in range(self.ns_ch):
-            seisP=np.convolve(self.ricker_w,dataP[i,:])
-            seisS=np.convolve(self.ricker_w,dataS[i,:])
+            seisP=np.convolve(self.ricker_w,dataP[i,:],mode='same')
+            seisS=np.convolve(self.ricker_w,dataS[i,:],mode='same')
             # cut head and tails of the convolved seismogram
-            dataP[i,:]=seisP[self.ns_w//2:-self.ns_w//2]
-            dataS[i,:]=seisS[self.ns_w//2:-self.ns_w//2]
+            dataP[i,:]=seisP
+            dataS[i,:]=seisS
         data = dataP + dataS
         data = self._add_noise(data, noise_type='gaussian')
         return data
@@ -153,24 +153,31 @@ class ConvolutionalSynth:
             dt=self.dt  
         else:
             dt=self.dt_w
-        # check if nsamples_w is even
-        if (self.ns_w%2):
-            t=((self.ns_w-1)*dt)/2.
-        else:
-            self.ns_w +=1
-            t=((self.ns_w-1)*dt)/2.
-        x=self.frequency_w*np.linspace(-t,t,self.ns_w)
-        ric=( ( 1. - ( 2. * np.pi * (x**2.) ) ) * np.exp( -np.pi * (x**2.) ) )
-        tax=x/self.frequency_w
+        # if nsamples_w even -> add 1 to make it odd
+        ns_w=int(round(self.time_window_w/dt))
+        if (ns_w%2)==0:
+            ns_w +=1
+
+        tax = np.arange(ns_w)*dt - self.time_window_w/2
+        ric = (1 - 2 * (np.pi**2) * (self.frequency_w**2) * (tax**2)) \
+                * np.exp(-(np.pi**2) * (self.frequency_w**2) * (tax**2))
         # if 'self.derivative_w=True' compute derivative of ricket wavelet
         if self.derivative_w:
-            # ric'
+            # ric' (same number of elements as ric)
             ric[1:]= ( ric[1:]-ric[0:-1] ) / dt
             ric[0]=0
             # normalization
             w_max = np.max(np.abs(ric))
             ric=ric/w_max
+        
         #self.ricker_w_tax=tax
+        check_wavelet=False
+        if check_wavelet:
+            plt.figure()
+            plt.plot(tax,ric,'k.-')
+            plt.xlabel('Time (s)')
+            plt.ylabel('Amplitude')
+            plt.title('Ricker wavelet')
         return ric
     
     def _load_fiber_geometry(self, filepath):
@@ -215,7 +222,7 @@ class ConvolutionalSynth:
         # generate TIME AXIS (+ tax numer of samples)
         self.tax, self.ns_tax = self.__gen_time_axis()
         self.frequency_w = time_parameters['frequency_w']
-        self.ns_w = time_parameters['nsamples_w']
+        self.time_window_w = time_parameters['time_window_w']
         self.dt_w = time_parameters['dt_w']
         self.derivative_w = time_parameters['derivative_w']
         # generate RICKER WAVELET
@@ -298,18 +305,18 @@ if __name__ == "__main__":
         'model': model}
 
     #### 5 - TIME AXIS (generate)
-    dt= 0.02                                        # ARBITRARY (?) 
-    time_window= 30 #s                             # ARBITRARY (?)
+    dt= 0.01  # == 100 Hz                           # ARBITRARY (?) 
+    time_window= 10 #s                             # ARBITRARY (?)
 
     #### 6 - RICKER WAVELET (generate)
-    frequency_w=30                                  # CHANGE
-    nsamples_w=200                                  # CHANGE
+    frequency_w=3                                  # CHANGE
+    time_window_w=1. # s                           # CHANGE
     dt_w=None                                       # if None, use dt
     derivative_w=False                              # if True, use derivative of Ricker
 
     time_inputs={
         'dt':dt, 'time_window':time_window,
-        'frequency_w':frequency_w, 'nsamples_w':nsamples_w ,
+        'frequency_w':frequency_w, 'time_window_w':time_window_w ,
         'dt_w':dt_w, 'derivative_w':derivative_w}
 
     #%% SYNTHETIC GENERATION:
@@ -332,6 +339,7 @@ if __name__ == "__main__":
     seismogram = synth.convolution(synth.event[0])  # test on first event
 
     # plot seismogram
+    plt.figure()
     plt.imshow(seismogram, aspect='auto', cmap='seismic', extent=[0, time_window, synth.ns_ch, 0])
     plt.colorbar(label='Amplitude')
     plt.xlabel('Time (s)')

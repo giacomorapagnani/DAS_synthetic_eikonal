@@ -2,16 +2,12 @@ import numpy as np
 import os
 from traveltimes_NLL_class import Traveltimes
 from traveltimes_event_class import TravelTimeEvent
+import matplotlib.pyplot as plt
 # %% CLASS
 
 class ConvolutionalSynth:
     """
     Class to generate synthetic DAS data using convolution and NLL travel times.
-    Attributes:
-        event (list): list containing event coordinates and source parameters:
-            EventName OriginTime Latitude(deg) Longitude(deg) Depth(km) Magnitude Strike Dip Rake 
-        fiber_geometry (list): List fiber geometry :
-            Station_name    Latitude    Longitude   Elevation_km
     """
 
     def __init__(self, events_path, fiber_geometry_path, 
@@ -39,6 +35,8 @@ class ConvolutionalSynth:
         phif = self.strike
         delta = self.dip
         l = self.rake
+        phir = self.receiver_azimuth()
+        ih = self.take_off_angle()
 
         Fp= ( np.cos(l) * np.sin(delta) * np.sin( 2 * ( phir - phif ) )
         - np.sin(l) * np.sin(2*delta) * (np.sin(phir - phif))**2 ) * ( np.sin(ih) )**2 
@@ -75,6 +73,7 @@ class ConvolutionalSynth:
         Returns:
             float: directivity amplitude for P or S phase.
         """
+        ih = self.take_off_angle()
         if phase=='P':
             dir_p = (np.cos(ih))**2
         elif phase=='S':
@@ -84,14 +83,14 @@ class ConvolutionalSynth:
             exit
         return dir_p, dir_s
 
-    def incidence_angle(self):
+    def receiver_azimuth(self):
         # !!!MISSING!!!
         return  
-    def receiver_azimuth(self):
+    def take_off_angle(self):
         # !!!MISSING!!!
         return
 
-    def trace_amplitude(self,phase, exclude_directivity=False,exclude_radiation_pattern=False):
+    def trace_amplitude(self,phase, exclude_directivity=False, exclude_radiation_pattern=False):
         # Calculate trace amplitude at a given fiber's channel.
         if exclude_directivity:
             dir_fib = 1
@@ -104,53 +103,63 @@ class ConvolutionalSynth:
         amp = 1 * dir_fib * rad_pat
         return  amp
 
-    def _gen_data_matrix(self, dt, time_window):
-        self.dt = dt
-        self.tax = self.__gen_time_axis(time_window)
-        data_p=np.zeros((np.size(self.fiber_geometry),np.size(tax)))
-        data_s=np.zeros((np.size(self.fiber_geometry),np.size(tax)))
+    def _gen_data_matrix(self):
+        data_p=np.zeros( ( self.ns_ch, self.ns_tax ) )
+        data_s=np.zeros( ( self.ns_ch, self.ns_tax ) )
         return data_p, data_s
     
-    def __gen_time_axis(self,tmax):
-        ns=int(round(tmax/self.dt))
-        tax=np.arange(ns)*dt
-        return tax
+    def __gen_time_axis(self):
+        ns=int(round(self.time_window/self.dt))
+        tax=np.arange(ns)*self.dt
+        return tax ,ns
 
     def convolution(self,event):
-        # generates P and S matrices for a given event and convolves with wavelet
-        # event (list) : EventName OriginTime Latitude(deg) Longitude(deg)
-        #                Depth(km) Magnitude Strike Dip Rake
-        tt_p=self.tt_class.get_travel_time(event, tt_nll_p_miss)
-        tt_s=self.tt_class.get_travel_time(event, tt_nll_s_miss)
+        # generates P,S arrivals convolved with Ricker wavelet, scaled with amplitude
+        tt_p=self.tt_class.get_travel_time(event, self.tt_nll_p)
+        tt_s=self.tt_class.get_travel_time(event, self.tt_nll_s)
+        tt_p_indices= np.round( tt_p / self.dt ).astype(int)
+        tt_s_indices= np.round( tt_s / self.dt ).astype(int)
+        
+        dataP,dataS=self._gen_data_matrix()
+        # trace_amplitude just gives one numebr = 1
+        # MODIFY!!!
+        dataP[self.ch_indices,tt_p_indices]= self.trace_amplitude('P',
+                    exclude_directivity=True, exclude_radiation_pattern=True )
+        dataS[self.ch_indices,tt_s_indices]= self.trace_amplitude('S',
+                    exclude_directivity=True, exclude_radiation_pattern=True )
+    
+        for i in range(self.ns_ch):
+            seisP=np.convolve(self.ricker_w,dataP[i,:])
+            seisS=np.convolve(self.ricker_w,dataS[i,:])
+            # cut head and tails of the convolved seismogram
+            dataP[i,:]=seisP[self.ns_w//2:-self.ns_w//2]
+            dataS[i,:]=seisS[self.ns_w//2:-self.ns_w//2]
+        data = dataP + dataS
+        data = self._add_noise(data, noise_type='gaussian')
+        return data
+    
+    def _add_noise(self, data, noise_type='gaussian'):
+        if noise_type=='gaussian':
+            noise = np.random.normal(0,0.03,(data.shape))
+        elif noise_type=='realistic':
+            # !!!MISSING!!!
+            noise = 0
+        data += noise
+        return data
 
-        tt_p_indx= int( round( tt_p / self.dt ) )
-        tt_s_indx= int( round( tt_s / self.dt ) )
-
-        dataP,dataS=self._gen_data_matrix(self.dt, time_window)
-        return
-    ######################################
-    ######################################
-    ######################################
-    trace_index=list(range(len(trace)))
-    time_index_p= int( round( trace['tt_p']/dt ) )
-    dataP[trace_index,time_index_p]=trace['amp_p']
-    ######################################
-    ######################################
-    ######################################
-
-    def ricker(self):
+    def __ricker(self):
         # select dt or dt_w (if provided)
         if self.dt_w is None:
             dt=self.dt  
         else:
             dt=self.dt_w
         # check if nsamples_w is even
-        if (self.nsamples_w%2):
-            t=((self.nsamples_w-1)*dt)/2.
+        if (self.ns_w%2):
+            t=((self.ns_w-1)*dt)/2.
         else:
-            self.nsamples_w +=1
-            t=((self.nsamples_w-1)*dt)/2.
-        x=self.frequency_w*np.linspace(-t,t,self.nsamples_w)
+            self.ns_w +=1
+            t=((self.ns_w-1)*dt)/2.
+        x=self.frequency_w*np.linspace(-t,t,self.ns_w)
         ric=( ( 1. - ( 2. * np.pi * (x**2.) ) ) * np.exp( -np.pi * (x**2.) ) )
         tax=x/self.frequency_w
         # if 'self.derivative_w=True' compute derivative of ricket wavelet
@@ -161,9 +170,8 @@ class ConvolutionalSynth:
             # normalization
             w_max = np.max(np.abs(ric))
             ric=ric/w_max
-        self.ricker_w=ric
-        self.ricker_w_tax=tax
-        return
+        #self.ricker_w_tax=tax
+        return ric
     
     def _load_fiber_geometry(self, filepath):
         # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
@@ -173,6 +181,10 @@ class ConvolutionalSynth:
             for line in f:
                 st_name, lat, lon, elev = line.split()
                 fiber_geometry.append([st_name, float(lat), float(lon), float(elev)])
+        # total number of channels
+        self.ns_ch=len(fiber_geometry)
+        # channel indices list
+        self.ch_indices=list( range( self.ns_ch ) )
         return fiber_geometry
     
     def _load_events(self, filepath):
@@ -200,10 +212,14 @@ class ConvolutionalSynth:
     def _load_time_parameters(self,time_parameters):
         self.dt = time_parameters['dt']
         self.time_window = time_parameters['time_window']
+        # generate TIME AXIS (+ tax numer of samples)
+        self.tax, self.ns_tax = self.__gen_time_axis()
         self.frequency_w = time_parameters['frequency_w']
-        self.nsamples_w = time_parameters['nsamples_w']
+        self.ns_w = time_parameters['nsamples_w']
         self.dt_w = time_parameters['dt_w']
         self.derivative_w = time_parameters['derivative_w']
+        # generate RICKER WAVELET
+        self.ricker_w = self.__ricker()
         return
 
 if __name__ == "__main__":
@@ -252,13 +268,13 @@ if __name__ == "__main__":
     fiber_geometry_file=os.path.join(fiber_geometry_dir, 'flegrei_stations_geometry.txt')      ### CHANGE ###
 
     #### 3 - NLL grid parameters (insert)
-    # (CHANGE: must match those used to generate the traveltimes)
-    nx=151 # number of grid points in x direction
-    ny=151 # number of grid points in y direction
-    nz=61  # number of grid points in z direction
-    dx=0.1 # km
-    dy=0.1 # km
-    dz=0.1 # km
+    # (CHANGE: must match those used to generate the NLL traveltimes)
+    nx=151      # number of grid points in x direction
+    ny=151      # number of grid points in y direction
+    nz=61       # number of grid points in z direction
+    dx=0.1      # km
+    dy=0.1      # km
+    dz=0.1      # km
     ox=0.0      # origin x coordinate (km)
     oy=0.0      # origin y coordinate (km)
     oz=-1.0     # origin z coordinate (km), positive DOWN
@@ -283,10 +299,10 @@ if __name__ == "__main__":
 
     #### 5 - TIME AXIS (generate)
     dt= 0.02                                        # ARBITRARY (?) 
-    time_window= 120 #s                             # ARBITRARY (?)
+    time_window= 30 #s                             # ARBITRARY (?)
 
     #### 6 - RICKER WAVELET (generate)
-    frequency_w=75                                  # CHANGE
+    frequency_w=30                                  # CHANGE
     nsamples_w=200                                  # CHANGE
     dt_w=None                                       # if None, use dt
     derivative_w=False                              # if True, use derivative of Ricker
@@ -311,20 +327,14 @@ if __name__ == "__main__":
 
     # phir: reciver-azimuth !!!MISSING!!!
 
-
     #----------------------------------------------------------------------
 
+    seismogram = synth.convolution(synth.event[0])  # test on first event
 
-
-    # Time vs Channels matrix
-
-    # Convolution
-    for i in range(np.size(trace_index)):
-        seisP=np.convolve(wavelet,dataP[i,:])
-        seisS=np.convolve(wavelet,dataS[i,:])
-
-    data = dataP + dataS
-
-    noise = np.random.normal(0,1/30,(data.shape))
-    data = data + noise
-    #----------------------------------------------------------------------
+    # plot seismogram
+    plt.imshow(seismogram, aspect='auto', cmap='seismic', extent=[0, time_window, synth.ns_ch, 0])
+    plt.colorbar(label='Amplitude')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Channel Number')
+    plt.title('Synthetic DAS Seismogram')
+    plt.show()

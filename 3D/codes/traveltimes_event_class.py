@@ -41,6 +41,7 @@ class TravelTimeEvent:
         for i in range (len(self.fiber_geometry)):
             ch_name=self.fiber_geometry[i][0]
             travel_times.append( self._compute_travel_time(ch_name, tt_nll) )
+        travel_times=np.array(travel_times, dtype=np.float32)
         return travel_times
 
     def _compute_travel_time(self, ch_name, tt_nll):

@@ -1,8 +1,9 @@
-import numpy as np
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+from pyrocko import trace, util, io
 from traveltimes_NLL_class import Traveltimes
 from traveltimes_event_class import TravelTimeEvent
-import matplotlib.pyplot as plt
 # %% CLASS
 
 class ConvolutionalSynth:
@@ -228,6 +229,31 @@ class ConvolutionalSynth:
         # generate RICKER WAVELET
         self.ricker_w = self.__ricker()
         return
+    def plot_seismogram(self,seismogram,event,plot_fig=True,save_fig=False):
+        plt.figure(f'{event[0]}', figsize=(13,7))
+        plt.title(f'{event[0]}')
+        plt.imshow(seismogram, aspect='auto', cmap='seismic', extent=[0, self.time_window, self.ns_ch, 0])
+        plt.colorbar(label='Amplitude')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Channel Number')
+        if save_fig:
+            plt.savefig(f'../PLOTS/{event[0]}.pdf')
+        if plot_fig:
+            plt.show()  
+        return
+    def save_seismogram_mseed(self,seismogram,event):
+        # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
+        # EVENTS -> list: event_name, tor, lat, lon, depth, mag, strike, dip, rake
+        #tmin = util.str_to_time(event[1])-5
+        tmin = util.str_to_time(event[1].replace('T', ' ').replace('Z', '')) - 5
+        traces=[]
+        for i,channel in enumerate(self.fiber_geometry): 
+            data = seismogram[i,:]
+            tr = trace.Trace(
+                    station=channel[0], channel='DAS', deltat=self.dt, tmin=tmin, ydata=data)
+            traces.append(tr)
+        io.save(traces, f'../DATA/{event[0]}.mseed')
+        return
 
 if __name__ == "__main__":
     #%% INPUTS:
@@ -322,7 +348,7 @@ if __name__ == "__main__":
     #%% SYNTHETIC GENERATION:
 
     # ConvolutionalSynth class
-    synth=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
+    synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
                              fiber_geometry_path = fiber_geometry_file, # 2 - FIBER GEOMETRY
                              NLL_grid_parameters = NLL_grid_inputs, # 3 - NLL GRID PARAMETERS
                              NLL_matrices_parameters = NLL_matrices_inputs, # 4 - NLL MATRICES
@@ -336,13 +362,11 @@ if __name__ == "__main__":
 
     #----------------------------------------------------------------------
 
-    seismogram = synth.convolution(synth.event[0])  # test on first event
+    seis = synth_class.convolution(synth_class.event[0])  # test on first event
 
-    # plot seismogram
-    plt.figure()
-    plt.imshow(seismogram, aspect='auto', cmap='seismic', extent=[0, time_window, synth.ns_ch, 0])
-    plt.colorbar(label='Amplitude')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Channel Number')
-    plt.title('Synthetic DAS Seismogram')
-    plt.show()
+    synth_class.plot_seismogram(seis,synth_class.event[0], plot_fig=True, save_fig=False)
+    
+    synth_class.save_seismogram_mseed(seis,synth_class.event[0])
+    
+    #save seism matrix 2d .npz
+    # matrix, xax, yax

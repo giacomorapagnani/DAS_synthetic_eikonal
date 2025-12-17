@@ -181,14 +181,17 @@ class ConvolutionalSynth:
             plt.title('Ricker wavelet')
         return ric
     
+    #---------------------------------------------
+    ################### LOAD #####################
+    #---------------------------------------------
     def _load_fiber_geometry(self, filepath):
-        # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
+        # FIBER GEOMETRY -> list: network_name channel_name, lat, lon, elev
         fiber_geometry = []
         with open(filepath, "r") as f:
             next(f)  # skip header
             for line in f:
-                st_name, lat, lon, elev = line.split()
-                fiber_geometry.append([st_name, float(lat), float(lon), float(elev)])
+                ntw_name, st_name, lat, lon, elev = line.split()
+                fiber_geometry.append([ntw_name, st_name, float(lat), float(lon), float(elev)])
         # total number of channels
         self.ns_ch=len(fiber_geometry)
         # channel indices list
@@ -229,6 +232,10 @@ class ConvolutionalSynth:
         # generate RICKER WAVELET
         self.ricker_w = self.__ricker()
         return
+    
+    #---------------------------------------------
+    ################## PLOT/SAVE #################
+    #---------------------------------------------
     def plot_seismogram(self,seismogram,event,plot_fig=True,save_fig=False):
         plt.figure(f'{event[0]}', figsize=(13,7))
         plt.title(f'{event[0]}')
@@ -238,21 +245,25 @@ class ConvolutionalSynth:
         plt.ylabel('Channel Number')
         if save_fig:
             plt.savefig(f'../PLOTS/{event[0]}.pdf')
+            print(f'-\nSAVING FIGURE: {event[0]}.pdf')
         if plot_fig:
             plt.show()  
         return
+    
     def save_seismogram_mseed(self,seismogram,event):
         # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
         # EVENTS -> list: event_name, tor, lat, lon, depth, mag, strike, dip, rake
         #tmin = util.str_to_time(event[1])-5
-        tmin = util.str_to_time(event[1].replace('T', ' ').replace('Z', '')) - 5
+        tmin = util.str_to_time(event[1].replace('T', ' ').replace('Z', ''))
         traces=[]
         for i,channel in enumerate(self.fiber_geometry): 
             data = seismogram[i,:]
             tr = trace.Trace(
-                    station=channel[0], channel='DAS', deltat=self.dt, tmin=tmin, ydata=data)
+                    network=channel[0],station=channel[1], channel='DAS',
+                    deltat=self.dt, tmin=tmin, ydata=data)
             traces.append(tr)
         io.save(traces, f'../DATA/{event[0]}.mseed')
+        print(f'-\nSAVING TRACE: {event[0]}.mseed')
         return
 
 if __name__ == "__main__":
@@ -285,15 +296,15 @@ if __name__ == "__main__":
         cat_file=f'catalogue_{cat_name}{str(nsources)}_ev.txt'
 
         ### Generate Catalogue
-        print(f'GENERATING NEW CATALOGUE: {cat_file}')
+        print(f'---\nGENERATING NEW CATALOGUE: {cat_file}')
         dataset=Synthetic_catalogue(cat_dir, inputs, input_type='dict')
         dataset.gen_catalogue(cat_file, cat_name, seed=11)
         events_file=os.path.join(cat_dir,cat_file)
     else:
         # Read already existing catalogue
         event_dir=os.path.join(workdir,'CAT')
-        filename_events='catalogue_flegrei_synth_1_ev.txt'                                ### CHANGE ###
-        print(f'READING EVENTS FROM FILE: {filename_events}')
+        filename_events='catalogue_flegrei_MT_final.txt'                                ### CHANGE ###
+        print(f'---\nREADING EVENTS FROM FILE: {filename_events}')
         events_file=os.path.join(event_dir,filename_events)
 
     #### 2 - FIBER GEOMETRY (load)
@@ -311,7 +322,7 @@ if __name__ == "__main__":
     ox=0.0      # origin x coordinate (km)
     oy=0.0      # origin y coordinate (km)
     oz=-1.0     # origin z coordinate (km), positive DOWN
-    coord_origin_lat=40.777242 # latitude of the grid origin 
+    coord_origin_lat=40.777242 # latitude of the grid origin
     coord_origin_lon=14.025848 # longitude of the grid origin
     coord_origin_ele=0.0       # elevation of the grid origin (km)
     NLL_grid_inputs = {
@@ -320,25 +331,23 @@ if __name__ == "__main__":
         'co_lat': coord_origin_lat, 'co_lon': coord_origin_lon, 'co_ele': coord_origin_ele}
 
     #### 4 - NLL traveltime matrices (load)
-    db_path = '../NLL/FLEGREI/nll_grid'                                                    ### CHANGE ###
+    db_path = workdir + 'NLL/FLEGREI/nll_grid'                                                    ### CHANGE ###
     hdr_filename = 'header.hdr'
     precision='single'
     model = 'time'
     NLL_matrices_inputs = {
-        'db_path': db_path,
-        'hdr_filename': hdr_filename,
-        'precision': precision,
-        'model': model}
+        'db_path': db_path, 'hdr_filename': hdr_filename,
+        'precision': precision, 'model': model}
 
     #### 5 - TIME AXIS (generate)
     dt= 0.01  # == 100 Hz                           # ARBITRARY (?) 
-    time_window= 10 #s                             # ARBITRARY (?)
+    time_window= 10 #s after origin time            # CHANGE
 
     #### 6 - RICKER WAVELET (generate)
     frequency_w=3                                  # CHANGE
     time_window_w=1. # s                           # CHANGE
-    dt_w=None                                       # if None, use dt
-    derivative_w=False                              # if True, use derivative of Ricker
+    dt_w=None                                      # if None, use dt
+    derivative_w=False                             # if True, use derivative of Ricker
 
     time_inputs={
         'dt':dt, 'time_window':time_window,
@@ -362,9 +371,10 @@ if __name__ == "__main__":
 
     #----------------------------------------------------------------------
 
-    seis = synth_class.convolution(synth_class.event[0])  # test on first event
+    # synthetic seismogram of first event
+    seis = synth_class.convolution(synth_class.event[0])
 
-    synth_class.plot_seismogram(seis,synth_class.event[0], plot_fig=True, save_fig=False)
+    #synth_class.plot_seismogram(seis,synth_class.event[0], plot_fig=True, save_fig=False)
     
     synth_class.save_seismogram_mseed(seis,synth_class.event[0])
     

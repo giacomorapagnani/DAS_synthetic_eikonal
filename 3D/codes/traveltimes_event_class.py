@@ -11,17 +11,17 @@ class TravelTimeEvent:
         self.coord=Coordinates(self.nll_par['co_lat'], self.nll_par['co_lon'],  self.nll_par['co_ele'])
 
     def _load_fiber_geometry(self, filepath):
-        # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
+        # FIBER GEOMETRY (list) ->  channel_name, lat, lon, elev
         fiber_geometry = []
         with open(filepath, "r") as f:
             next(f)  # skip header
             for line in f:
-                st_name, lat, lon, elev = line.split()
-                fiber_geometry.append([st_name, float(lat), float(lon), float(elev)])
+                ntw_name,st_name, lat, lon, elev = line.split()
+                fiber_geometry.append([ntw_name, st_name, float(lat), float(lon), float(elev)])
         return fiber_geometry
 
     def _load_events(self, filepath):
-        # EVENTS -> list: event_name, tor, lat, lon, depth, mag, strike, dip, rake
+        # EVENT (list) ->  event_name, tor, lat, lon, depth, mag, strike, dip, rake
         events = []
         with open(filepath, "r") as f:
             next(f)  # skip header
@@ -33,13 +33,13 @@ class TravelTimeEvent:
     
     def get_travel_time(self, event, tt_nll):
         # travel time for single event
-        # event (list): event_name, tor, lat, lon, depth, mag, strike, dip, rake
+        # EVENT (list) -> event_name, tor, lat, lon, depth, mag, strike, dip, rake
         self.ev_lat = event[2]  #event latitude
         self.ev_lon = event[3]  #event longitude
         self.ev_depth = event[4]  #event depth in km (positive DOWN) 
         travel_times=[]
         for i in range (len(self.fiber_geometry)):
-            ch_name=self.fiber_geometry[i][0]
+            ch_name=self.fiber_geometry[i][1]
             travel_times.append( self._compute_travel_time(ch_name, tt_nll) )
         travel_times=np.array(travel_times, dtype=np.float32)
         return travel_times

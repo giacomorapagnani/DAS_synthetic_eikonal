@@ -114,7 +114,7 @@ class ConvolutionalSynth:
         tax=np.arange(ns)*self.dt
         return tax ,ns
 
-    def convolution(self,event):
+    def convolution(self,event,noise_type='gaussian'):
         # generates P,S arrivals convolved with Ricker wavelet, scaled with amplitude
         tt_p=self.tt_class.get_travel_time(event, self.tt_nll_p)
         tt_s=self.tt_class.get_travel_time(event, self.tt_nll_s)
@@ -136,13 +136,13 @@ class ConvolutionalSynth:
             dataP[i,:]=seisP
             dataS[i,:]=seisS
         data = dataP + dataS
-        data = self._add_noise(data, noise_type='gaussian')
+        data = self._add_noise(data, noise_type)
         return data
     
-    def _add_noise(self, data, noise_type='gaussian'):
+    def _add_noise(self, data, noise_type):
         if noise_type=='gaussian':
             noise = np.random.normal(0,0.03,(data.shape))
-        elif noise_type=='realistic':
+        elif noise_type=='real':
             # !!!MISSING!!!
             noise = 0
         data += noise
@@ -207,6 +207,7 @@ class ConvolutionalSynth:
                 event_name, tor, lat, lon, depth, mag, strike, dip, rake = line.split()
                 events.append([event_name, str(tor), float(lat), float(lon), float(depth), 
                                float(mag), float(strike), float(dip), float(rake)])
+        print(f'---\nREADING EVENTS FROM FILE: {filepath.split("/")[-1]}')
         return events
     
     def _load_matrices_parameters(self,NLL_matrices_parameters):
@@ -244,13 +245,23 @@ class ConvolutionalSynth:
         plt.xlabel('Time (s)')
         plt.ylabel('Channel Number')
         if save_fig:
-            plt.savefig(f'../PLOTS/{event[0]}.pdf')
+            figpath=f'../PLOTS/{event[0]}.pdf'
+            if os.path.isfile(figpath):
+                os.remove(figpath)
+            plt.savefig(figpath)
             print(f'-\nSAVING FIGURE: {event[0]}.pdf')
         if plot_fig:
             plt.show()  
         return
     
-    def save_seismogram_mseed(self,seismogram,event):
+    def save_seismogram(self,seismogram,event,file_prefix='',save_mseed=True,save_npy=True):
+        if save_mseed:
+            self._save_seismogram_mseed(seismogram,event,file_prefix)
+        if save_npy:
+            self._save_seismogram_npy(seismogram,event,file_prefix)
+        return
+    
+    def _save_seismogram_mseed(self,seismogram,event,file_prefix):
         # FIBER GEOMETRY -> list: channel_name, lat, lon, elev
         # EVENTS -> list: event_name, tor, lat, lon, depth, mag, strike, dip, rake
         #tmin = util.str_to_time(event[1])-5
@@ -262,8 +273,20 @@ class ConvolutionalSynth:
                     network=channel[0],station=channel[1], channel='DAS',
                     deltat=self.dt, tmin=tmin, ydata=data)
             traces.append(tr)
-        io.save(traces, f'../DATA/{event[0]}.mseed')
-        print(f'-\nSAVING TRACE: {event[0]}.mseed')
+        data_dir=f'../DATA/{event[0]}'
+        if not os.path.isdir(data_dir):
+            os.mkdir(data_dir)
+        io.save(traces, f'{data_dir}/{file_prefix}{event[0]}.mseed')
+        print(f'-\nSAVING TRACES mseed: {file_prefix}{event[0]}.mseed')
+        return
+    
+    def _save_seismogram_npy(self,seismogram,event,file_prefix):
+        data_dir=f'../DATA/{event[0]}'
+        if not os.path.isdir(data_dir):
+            os.mkdir(data_dir)
+        filepath=f'{data_dir}/{file_prefix}{event[0]}.npz'
+        np.savez(filepath,matrix=seismogram,time_ax=self.tax,channel_ax=self.ch_indices)
+        print(f'-\nSAVING TRACES numpy : {file_prefix}{event[0]}.mseed')
         return
 
 if __name__ == "__main__":
@@ -304,7 +327,6 @@ if __name__ == "__main__":
         # Read already existing catalogue
         event_dir=os.path.join(workdir,'CAT')
         filename_events='catalogue_flegrei_MT_final.txt'                                ### CHANGE ###
-        print(f'---\nREADING EVENTS FROM FILE: {filename_events}')
         events_file=os.path.join(event_dir,filename_events)
 
     #### 2 - FIBER GEOMETRY (load)
@@ -371,12 +393,13 @@ if __name__ == "__main__":
 
     #----------------------------------------------------------------------
 
-    # synthetic seismogram of first event
-    seis = synth_class.convolution(synth_class.event[0])
+    # synthetic seismogram of one event
+    ev_number=87            # CHANGE
+    seis = synth_class.convolution(synth_class.event[ev_number])
 
-    #synth_class.plot_seismogram(seis,synth_class.event[0], plot_fig=True, save_fig=False)
+    #synth_class.plot_seismogram(seis,synth_class.event[ev_number], plot_fig=True, save_fig=True)
     
-    synth_class.save_seismogram_mseed(seis,synth_class.event[0])
-    
-    #save seism matrix 2d .npz
-    # matrix, xax, yax
+    synth_class.save_seismogram(seismogram = seis,
+                                event = synth_class.event[ev_number],
+                                file_prefix='synth_',
+                                save_mseed=True,save_npy=True)

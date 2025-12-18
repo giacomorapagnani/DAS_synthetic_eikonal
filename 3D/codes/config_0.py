@@ -104,7 +104,7 @@ synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
     #----------------------------------------------------------------------
 
 # synthetic seismogram of one event
-ev_number=87            # CHANGE
+ev_number=10            # CHANGE
 seis = synth_class.convolution(synth_class.event[ev_number])
 
 #synth_class.plot_seismogram(seis,synth_class.event[ev_number], plot_fig=True, save_fig=True)

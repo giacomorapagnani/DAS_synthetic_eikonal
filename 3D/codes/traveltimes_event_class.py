@@ -45,6 +45,7 @@ class TravelTimeEvent:
         return travel_times
 
     def _compute_travel_time(self, ch_name, tt_nll):
+        # POSSIBLE OPTIMIZATION: avoid reshape
         tt_cube= np.reshape(tt_nll[ch_name],(self.nll_par['nx'], self.nll_par['ny'], self.nll_par['nz']))
         ev_index=self.__compute_event_coord_index()
         tt=tt_cube[ev_index[0], ev_index[1], ev_index[2]]

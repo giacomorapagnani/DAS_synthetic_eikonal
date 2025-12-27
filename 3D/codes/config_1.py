@@ -43,14 +43,14 @@ else:
 fiber_geometry_dir=os.path.join(workdir,'FIBER_GEOMETRY')
 fiber_geometry_file=os.path.join(fiber_geometry_dir, 'flegrei_stations_geometry.txt')      ### CHANGE ###
 
-#### 3 - NLL grid parameters (insert)
+#### 3 - NLL grid parameters
 # (CHANGE: must match those used to generate the NLL traveltimes)
-nx=151      # number of grid points in x direction
-ny=151      # number of grid points in y direction
-nz=61       # number of grid points in z direction
-dx=0.1      # km
-dy=0.1      # km
-dz=0.1      # km
+nx=751      # number of grid points in x direction
+ny=751      # number of grid points in y direction
+nz=301       # number of grid points in z direction
+dx=0.02      # km
+dy=0.02      # km
+dz=0.02      # km
 ox=0.0      # origin x coordinate (km)
 oy=0.0      # origin y coordinate (km)
 oz=-1.0     # origin z coordinate (km), positive DOWN
@@ -63,7 +63,7 @@ NLL_grid_inputs = {
     'co_lat': coord_origin_lat, 'co_lon': coord_origin_lon, 'co_ele': coord_origin_ele}
 
 #### 4 - NLL traveltime matrices (load)
-db_path = workdir + 'NLL/FLEGREI/nll_grid'                                                    ### CHANGE ###
+db_path = workdir + 'NLL/FLEGREI_1/nll_grid'                                                    ### CHANGE ###
 hdr_filename = 'header.hdr'
 precision='single'
 model = 'time'
@@ -76,7 +76,7 @@ dt= 0.01  # == 100 Hz                           # ARBITRARY (?)
 time_window= 10 #s after origin time            # CHANGE
 
 #### 6 - RICKER WAVELET (generate)
-frequency_w=3                                  # CHANGE
+frequency_w=10                                  # CHANGE
 time_window_w=1. # s                           # CHANGE
 dt_w=None                                      # if None, use dt
 derivative_w=False                             # if True, use derivative of Ricker
@@ -102,14 +102,16 @@ synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
     # phir: reciver-azimuth !!!MISSING!!!
 
     #----------------------------------------------------------------------
+# synthetic seismogram of ALL events
+#synth_class.generate_synthetics(noise_type='gaussian', file_prefix='', plot_fig=False, save_fig=False, save_mseed=False, save_npy=True)
 
 # synthetic seismogram of one event
-ev_number=10            # CHANGE
-seis = synth_class.convolution(synth_class.event[ev_number])
+ev_number=52            # CHANGE
+seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
 
-#synth_class.plot_seismogram(seis,synth_class.event[ev_number], plot_fig=True, save_fig=True)
+#synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
     
 synth_class.save_seismogram(seismogram = seis,
-                            event = synth_class.event[ev_number],
-                            file_prefix='synth_',
+                            event = synth_class.events[ev_number],
+                            file_prefix='synth_1_',
                             save_mseed=True,save_npy=True)

@@ -14,7 +14,7 @@ class ConvolutionalSynth:
     def __init__(self, events_path, fiber_geometry_path, 
                  NLL_grid_parameters, NLL_matrices_parameters, 
                  time_parameters):
-        self.event = self._load_events(events_path)
+        self.events = self._load_events(events_path)
         self.fiber_geometry = self._load_fiber_geometry(fiber_geometry_path)
         self.tt_class = TravelTimeEvent(NLL_grid_parameters, fiber_geometry_path)
         self._load_matrices_parameters(NLL_matrices_parameters)
@@ -114,7 +114,7 @@ class ConvolutionalSynth:
         tax=np.arange(ns)*self.dt
         return tax ,ns
 
-    def convolution(self,event,noise_type='gaussian'):
+    def convolution(self,event,noise_type='none'):
         # generates P,S arrivals convolved with Ricker wavelet, scaled with amplitude
         tt_p=self.tt_class.get_travel_time(event, self.tt_nll_p)
         tt_s=self.tt_class.get_travel_time(event, self.tt_nll_s)
@@ -145,8 +145,23 @@ class ConvolutionalSynth:
         elif noise_type=='real':
             # !!!MISSING!!!
             noise = 0
+        elif noise_type=='none':
+            return data
+        else:
+            print('ERROR: noise type not specified.')
+            exit
         data += noise
         return data
+    
+    def generate_synthetics(self, noise_type='none', file_prefix='', plot_fig=False, save_fig=False, save_mseed=False, save_npy=True):
+        for event in self.events:
+            print(f'---\nGENERATING SYNTHETIC SEISMOGRAM for event: {event[0]}')
+            data = self.convolution(event,noise_type)
+            if plot_fig or save_fig:
+                self.plot_seismogram(data,event,file_prefix,plot_fig,save_fig)
+            if save_mseed or save_npy:
+                self.save_seismogram(data,event,file_prefix,save_mseed,save_npy)
+        return
 
     def __ricker(self):
         # select dt or dt_w (if provided)
@@ -170,8 +185,9 @@ class ConvolutionalSynth:
             # normalization
             w_max = np.max(np.abs(ric))
             ric=ric/w_max
-        
         #self.ricker_w_tax=tax
+        
+        # TRUE if you want to plot the ricker wavelet
         check_wavelet=False
         if check_wavelet:
             plt.figure()
@@ -237,7 +253,7 @@ class ConvolutionalSynth:
     #---------------------------------------------
     ################## PLOT/SAVE #################
     #---------------------------------------------
-    def plot_seismogram(self,seismogram,event,plot_fig=True,save_fig=False):
+    def plot_seismogram(self,seismogram,event,file_prefix='',plot_fig=True,save_fig=False):
         plt.figure(f'{event[0]}', figsize=(13,7))
         plt.title(f'{event[0]}')
         plt.imshow(seismogram, aspect='auto', cmap='seismic', extent=[0, self.time_window, self.ns_ch, 0])
@@ -245,11 +261,11 @@ class ConvolutionalSynth:
         plt.xlabel('Time (s)')
         plt.ylabel('Channel Number')
         if save_fig:
-            figpath=f'../PLOTS/{event[0]}.pdf'
+            figpath=f'../PLOTS/{file_prefix}{event[0]}.pdf'
             if os.path.isfile(figpath):
                 os.remove(figpath)
             plt.savefig(figpath)
-            print(f'-\nSAVING FIGURE: {event[0]}.pdf')
+            print(f'-\nSAVING FIGURE: {file_prefix}{event[0]}.pdf')
         if plot_fig:
             plt.show()  
         return
@@ -386,20 +402,21 @@ if __name__ == "__main__":
                              time_parameters = time_inputs) # 5,6 - TIME AXIS + RICKER WAVELET
 
     #----------------------------------------------------------------------
-
     # ih: incidence angle !!!MISSING!!!
 
     # phir: reciver-azimuth !!!MISSING!!!
 
     #----------------------------------------------------------------------
+    # synthetic seismogram of ALL events
+    #synth_class.generate_synthetics(noise_type='gaussian', file_prefix='', plot_fig=False, save_fig=False, save_mseed=False, save_npy=True)
 
     # synthetic seismogram of one event
-    ev_number=87            # CHANGE
-    seis = synth_class.convolution(synth_class.event[ev_number])
+    ev_number=52            # CHANGE
+    seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
 
-    #synth_class.plot_seismogram(seis,synth_class.event[ev_number], plot_fig=True, save_fig=True)
+    synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
     
-    synth_class.save_seismogram(seismogram = seis,
-                                event = synth_class.event[ev_number],
-                                file_prefix='synth_',
-                                save_mseed=True,save_npy=True)
+    #synth_class.save_seismogram(seismogram = seis,
+    #                            event = synth_class.events[ev_number],
+    #                            file_prefix='synth_',
+    #                            save_mseed=False,save_npy=False)

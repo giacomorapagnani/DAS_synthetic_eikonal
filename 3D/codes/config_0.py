@@ -9,15 +9,15 @@ if SWITCH_generate_new_catalogue:
     # generate new synthetic catalogue
     from synthetic_catalogue_class import Synthetic_catalogue
     ### Catalogue Parameters 
-    nsources=2
+    nsources=200
     lat_min=40.775
     lat_max=40.855       
     lon_min=14.07           
     lon_max=14.175          
     dep_min=1000          
     dep_max=5000           
-    t_min="2022-01-01"    
-    t_max="2025-12-01"    
+    t_min="2020-01-01"    
+    t_max="2026-01-01"    
     mag_min=2.0           
     mag_max=4.5           
     inputs={'n_sources':nsources,'latmin':lat_min, 'latmax':lat_max, 'lonmin':lon_min, 'lonmax':lon_max, 'depmin':dep_min, 'depmax':dep_max, 
@@ -76,7 +76,7 @@ dt= 0.01  # == 100 Hz                           # ARBITRARY (?)
 time_window= 10 #s after origin time            # CHANGE
 
 #### 6 - RICKER WAVELET (generate)
-frequency_w=3                                  # CHANGE
+frequency_w=5                                  # CHANGE
 time_window_w=1. # s                           # CHANGE
 dt_w=None                                      # if None, use dt
 derivative_w=False                             # if True, use derivative of Ricker
@@ -103,13 +103,12 @@ synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
 
     #----------------------------------------------------------------------
 # synthetic seismogram of ALL events
-#synth_class.generate_synthetics(noise_type='gaussian', file_prefix='', plot_fig=False, save_fig=False, save_mseed=False, save_npy=True)
+synth_class.generate_synthetics(noise_type='gaussian', file_prefix='synth_0_', plot_fig=False, save_fig=False, save_mseed=True, save_npy=False)
 
 # synthetic seismogram of one event
-ev_number=52            # CHANGE
-seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
-
-synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
+#ev_number=52            # CHANGE
+#seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
+#synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
     
 #synth_class.save_seismogram(seismogram = seis,
 #                            event = synth_class.events[ev_number],

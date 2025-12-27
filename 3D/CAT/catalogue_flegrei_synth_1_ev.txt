@@ -1,2 +1,0 @@
-EventName OriginTime Latitude(deg) Longitude(deg) Depth(km) Magnitude Strike Dip Rake 
-flegrei_synth_20250226T232916 2025-02-26T23:29:16.269814Z 40.8372 14.0775 2.67 3.93  0.00  0.00 -180.00

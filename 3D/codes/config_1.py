@@ -76,7 +76,7 @@ dt= 0.01  # == 100 Hz                           # ARBITRARY (?)
 time_window= 10 #s after origin time            # CHANGE
 
 #### 6 - RICKER WAVELET (generate)
-frequency_w=10                                  # CHANGE
+frequency_w=5                                  # CHANGE
 time_window_w=1. # s                           # CHANGE
 dt_w=None                                      # if None, use dt
 derivative_w=False                             # if True, use derivative of Ricker
@@ -108,10 +108,9 @@ synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
 # synthetic seismogram of one event
 ev_number=52            # CHANGE
 seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
-
-#synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
+synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
     
-synth_class.save_seismogram(seismogram = seis,
-                            event = synth_class.events[ev_number],
-                            file_prefix='synth_1_',
-                            save_mseed=True,save_npy=True)
+#synth_class.save_seismogram(seismogram = seis,
+#                            event = synth_class.events[ev_number],
+#                            file_prefix='synth_1_',
+#                            save_mseed=True,save_npy=True)

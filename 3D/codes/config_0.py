@@ -103,12 +103,12 @@ synth_class=ConvolutionalSynth(events_path = events_file, # 1 - EVENTS
 
     #----------------------------------------------------------------------
 # synthetic seismogram of ALL events
-synth_class.generate_synthetics(noise_type='gaussian', file_prefix='synth_0_', plot_fig=False, save_fig=False, save_mseed=True, save_npy=False)
+#synth_class.generate_synthetics(noise_type='gaussian', file_prefix='synth_0_', plot_fig=False, save_fig=False, save_mseed=True, save_npy=False)
 
 # synthetic seismogram of one event
-#ev_number=52            # CHANGE
-#seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
-#synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
+ev_number=52            # CHANGE
+seis = synth_class.convolution(synth_class.events[ev_number],noise_type='gaussian')
+synth_class.plot_seismogram(seis,synth_class.events[ev_number], file_prefix='', plot_fig=True, save_fig=False)
     
 #synth_class.save_seismogram(seismogram = seis,
 #                            event = synth_class.events[ev_number],

@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from traveltimes_NLL_class import Traveltimes
+from traveltimes_NLL_class import Traveltimes_NLL
 import matplotlib.pyplot as plt
 from latlon2cart_class import Coordinates
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     hdr_filename = 'header.hdr'
     precision='single'
     model = 'time'
-    tt_nll_obj = Traveltimes(db_path, hdr_filename)
+    tt_nll_obj = Traveltimes_NLL(db_path, hdr_filename)
     tt_nll_p = tt_nll_obj.load_traveltimes('P', model, precision)
     tt_nll_s = tt_nll_obj.load_traveltimes('S', model, precision)
     #########

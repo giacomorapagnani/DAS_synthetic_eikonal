@@ -2,7 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from pyrocko import trace, util, io
-from traveltimes_NLL_class import Traveltimes
+from traveltimes_NLL_class import Traveltimes_NLL
+from angles_NLL_class import Angles_NLL
 from traveltimes_event_class import TravelTimeEvent
 # %% CLASS
 
@@ -20,7 +21,7 @@ class ConvolutionalSynth:
         self._load_matrices_parameters(NLL_matrices_parameters)
         self._load_time_parameters(time_parameters)
 
-    def _radiation_patterns(self,phase):
+    def _radiation_patterns(self,event,phase):
         """
         Calculate radiation pattern at fiber's channel given a FM.
         Args:
@@ -36,8 +37,8 @@ class ConvolutionalSynth:
         phif = self.strike
         delta = self.dip
         l = self.rake
-        phir = self.receiver_azimuth()
-        ih = self.take_off_angle()
+        phir = self.receiver_azimuth(event,phase)
+        ih = self.take_off_angle(event,phase)
 
         Fp= ( np.cos(l) * np.sin(delta) * np.sin( 2 * ( phir - phif ) )
         - np.sin(l) * np.sin(2*delta) * (np.sin(phir - phif))**2 ) * ( np.sin(ih) )**2 
@@ -61,11 +62,12 @@ class ConvolutionalSynth:
         elif phase=='S':
             return Fs
         else:
-            print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
+            print('ERROR: in directvity_fiber Phase not correctly specified.\n choose P or S')
             exit
         return
     
-    def _directivity_fiber(self,phase):
+    def _directivity_fiber(self,event,phase):
+        #MISSING
         """
         Calculate directivity at a given fiber's channel.
         Args:
@@ -74,33 +76,54 @@ class ConvolutionalSynth:
         Returns:
             float: directivity amplitude for P or S phase.
         """
-        ih = self.take_off_angle()
+        ih = self.take_off_angle(event,phase)
         if phase=='P':
             dir_p = (np.cos(ih))**2
+            return dir_p
         elif phase=='S':
             dir_s = np.sin(2*ih)
+            return dir_s
         else:
             print('Error: in directvity_fiber Phase not correctly specified.\n choose P or S')
             exit
-        return dir_p, dir_s
-
-    def receiver_azimuth(self):
-        # !!!MISSING!!!
-        return  
-    def take_off_angle(self):
-        # !!!MISSING!!!
         return
 
-    def trace_amplitude(self,phase, exclude_directivity=False, exclude_radiation_pattern=False):
-        # Calculate trace amplitude at a given fiber's channel.
+    def receiver_azimuth(self,event,phase):
+        # receiver azimuth : phir
+        if phase=='P':
+            return  self.tt_class.get_travel_time(event, self.angle_p_phir)
+        elif phase=='S':
+            return  self.tt_class.get_travel_time(event, self.angle_s_phir)
+        return 
+     
+    def take_off_angle(self,event,phase):
+        # take-off angle : ih 
+        if phase=='P':
+            return  self.tt_class.get_travel_time(event, self.angle_p_ih)
+        elif phase=='S':
+            return  self.tt_class.get_travel_time(event, self.angle_s_ih)
+        return
+
+    def trace_amplitude(self, event, phase, exclude_directivity=False, exclude_radiation_pattern=False):
+        # Calculate trace amplitude at a fiber's channels for one event
+        
+        # Phase check
+        if phase != 'P' and phase != 'S':
+            print('ERROR: in trace_amplitude Phase not correctly specified.\n choose P or S')
+            exit
+
+        # Exclude directivity
         if exclude_directivity:
             dir_fib = 1
         else:
-            dir_fib = self._directivity_fiber(phase)
+            dir_fib = self._directivity_fiber(event,phase)
+
+        # Exclude radiation pattern
         if exclude_radiation_pattern:
             rad_pat = 1
         else:
-            rad_pat = self._radiation_patterns(phase)
+            rad_pat = self._radiation_patterns(event,phase)
+        
         amp = 1 * dir_fib * rad_pat
         return  amp
 
@@ -122,12 +145,8 @@ class ConvolutionalSynth:
         tt_s_indices= np.round( tt_s / self.dt ).astype(int)
         
         dataP,dataS=self._gen_data_matrix()
-        # trace_amplitude just gives one numebr = 1
-        # MODIFY!!!
-        dataP[self.ch_indices,tt_p_indices]= self.trace_amplitude('P',
-                    exclude_directivity=True, exclude_radiation_pattern=True )
-        dataS[self.ch_indices,tt_s_indices]= self.trace_amplitude('S',
-                    exclude_directivity=True, exclude_radiation_pattern=True )
+        dataP[self.ch_indices,tt_p_indices]= self.trace_amplitude(event,phase='P')
+        dataS[self.ch_indices,tt_s_indices]= self.trace_amplitude(event,phase='S')
     
         for i in range(self.ns_ch):
             seisP=np.convolve(self.ricker_w,dataP[i,:],mode='same')
@@ -231,10 +250,16 @@ class ConvolutionalSynth:
         hdr_filename = NLL_matrices_parameters['hdr_filename']
         precision = NLL_matrices_parameters['precision']
         model = NLL_matrices_parameters['model']
+
         # Load NLL traveltime matrices
-        tt_nll_class = Traveltimes(db_path, hdr_filename)
+        tt_nll_class = Traveltimes_NLL(db_path, hdr_filename)
         self.tt_nll_p = tt_nll_class.load_traveltimes('P', model, precision)
         self.tt_nll_s = tt_nll_class.load_traveltimes('S', model, precision)
+
+        # ANGLES
+        angle_class = Angles_NLL(db_path, hdr_filename)
+        self.angle_p_ih, self.angle_p_phir = angle_class.load_angles('P', precision)
+        self.angle_s_ih, self.angle_s_phir = angle_class.load_angles('S', precision)
         return
     
     def _load_time_parameters(self,time_parameters):
